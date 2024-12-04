@@ -38,27 +38,70 @@ class GameServer
 
             socket.send(JSON.stringify(welcomData));
 
+            //새로 추가 : 현재 접속해 있는 다른 플레이어들의 위치 정보 전송
+            this.players.forEach((playerInfo, id) => {
+                    if(id !== playerID)
+                    {
+                        socket.send(JSON.stringify({
+                            type : 'playerPosition',
+                            playerId: id,
+                            position: playerInfo.position
+                        }));
+                    }
+            });
+
             socket.on(`message` , (message) => {
                 try
                 {
                     const data = JSON.parse(message);
 
-                    const messageString = iconv.decode(Buffer.from(data.message), 'euc.kr');
-                    console.log(`수신된 메세지 : ` , messageString);
-                    this.broadcast({
-                        type: `chat`,
-                        message: messageString
-                    });
-                } catch (error){
-                    const messageString = iconv.decode(message, 'euc.kr');
-                    console.log(`수신된 메세지 :` , messageString);
-                    this.broadcast({
-                        type: `chat`,
-                        message: messageString
-                    });
+                    //switch 문으로 메세지 타입 처리 추가
+                    switch(data.type)
+                    {
+                        case 'chat' :
+                            try
+                            {
+                                const messageString = iconv.decode(Buffer.from(data.message), 'euc.kr');
+                                console.log(`수신된 메세지 : ` , messageString);
+                                this.broadcast({
+                                type: `chat`,
+                                 message: messageString
+                                });
+                            }
+                            catch (error){
+                                const messageString = iconv.decode(message, 'euc.kr');
+                                console.log(`수신된 메세지 :` , messageString);
+                                this.broadcast({
+                                    type: `chat`,
+                                    message: messageString
+                                });
+                    }
+                    break;
 
+                    case 'playerPosition':
+                     if(this.players.has(playerID))
+                     {
+                        this.players.get(playerID).position = data.position;        //플레이어 위치 업데이트
+                        //다른 모든 클라이언트에게 위치 정보 전송
+                        this.broadcast({
+                            type: 'playerPosition',
+                            playerID: playerId,
+                            position: data.position;
+
+                        });
+                     }
+                     break;
+                    
+                    }
+                }
+                catch(error)
+                {
+                    console.error('메세지 처리 중 오류');
                 }
             });
+                
+            
+            
 
             socket.on(`close` , ()=> {
                 this.clients.delete(socket);        //클라이언트 제거
@@ -86,7 +129,7 @@ class GameServer
 
     generatePlayerId()
     {
-        return `player_` + Math.random().toString(36),substr(2,9);
+        return `player_` + Math.random().toString(36).substr(2,9);
     }
 }
 
